@@ -1,204 +1,158 @@
-import os
-import streamlit as st
-import requests
-import pandas as pd
-from datetime import datetime
-import base64
+ const API_KEY = '969f9fd68e54e135160a7f0e1f118155';
 
-API_KEY = "969f9fd68e54e135160a7f0e1f118155"
-anim_dir = os.path.join(os.path.dirname(__file__), "videos")
+// Fungsi emoji cuaca
+function weatherIcon(desc) {
+    desc = desc.toLowerCase();
+    if (desc.includes('rain')) return '🌧️';
+    if (desc.includes('cloud')) return '☁️';
+    if (desc.includes('clear')) return '☀️';
+    if (desc.includes('snow')) return '❄️';
+    if (desc.includes('storm') || desc.includes('thunder')) return '⛈️';
+    return '🌥️';
+}
 
+// Fungsi memilih gif cuaca dari folder videos
+function getWeatherGif(desc) {
+    desc = desc.toLowerCase();
+    if (desc.includes('rain')) return 'videos/hujan.gif';
+    if (desc.includes('cloud')) return 'videos/mendung.gif';
+    if (desc.includes('clear')) return 'videos/cerah.gif';
+    if (desc.includes('storm') || desc.includes('thunder')) return 'videos/petir.gif';
+    return 'videos/cerah.gif';
+}
 
-def get_weather_data(city, unit):
-    unit_param = "metric" if unit == "Celsius" else "imperial"
-    current_url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units={unit_param}"
-    forecast_url = f"http://api.openweathermap.org/data/2.5/forecast?q={city}&appid={API_KEY}&units={unit_param}"
-    current_data = requests.get(current_url).json()
-    forecast_data = requests.get(forecast_url).json()
-    return current_data, forecast_data
+// Deteksi kota default via IP
+function getLocationByIP() {
+    fetch('https://ip-api.com/json')
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('city-input').value = data.city || 'Lampung';
+    })
+    .catch(() => {
+        document.getElementById('city-input').value = 'Lampung';
+    });
+}
+getLocationByIP();
 
+// Event handler
+document.getElementById('weather-btn').onclick = showWeather;
+document.getElementById('city-input').addEventListener("keypress", function(e) {
+    if (e.key === "Enter") showWeather();
+});
 
-def get_location_by_ip():
-    try:
-        res = requests.get("http://ip-api.com/json").json()
-        return res.get("city", "Canberra")
-    except:
-        return "Canberra"
+function showWeather() {
+    const city = document.getElementById('city-input').value.trim();
+    const unit = document.getElementById('unit-select').value;
+    if (!city) {
+        alert("Masukkan nama kota!");
+        return;
+    }
+    // Bersihkan konten sebelumnya
+    document.getElementById('weather-section').innerHTML = '';
+    document.getElementById('alert-section').innerHTML = '';
+    document.getElementById('hourly-section').innerHTML = '';
+    document.getElementById('daily-section').innerHTML = '';
 
+    const current_url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=${unit}&lang=id`;
+    const forecast_url = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${API_KEY}&units=${unit}&lang=id`;
 
-def weather_icon(description):
-    desc = description.lower()
-    if 'rain' in desc:
-        return '🌧️'
-    elif 'cloud' in desc:
-        return '☁️'
-    elif 'clear' in desc:
-        return '☀️'
-    elif 'snow' in desc:
-        return '❄️'
-    elif 'storm' in desc or 'thunder' in desc:
-        return '⛈️'
-    else:
-        return '🌥️'
+    Promise.all([
+        fetch(current_url).then(r => r.json()),
+        fetch(forecast_url).then(r => r.json())
+    ]).then(([current, forecast]) => {
+        if (current.cod != 200) {
+            document.getElementById('weather-section').innerHTML = `<div style="color:#f55;background:#fff3;padding:14px 10px;border-radius:8px;">Kota tidak ditemukan atau terjadi kesalahan pada API.</div>`;
+            return;
+        }
+        // Data utama
+        const weather = current.weather[0];
+        const temp = Math.round(current.main.temp);
+        const temp_max = Math.round(current.main.temp_max);
+        const temp_min = Math.round(current.main.temp_min);
+        const desc = weather.description.charAt(0).toUpperCase() + weather.description.slice(1);
+        const icon = weatherIcon(weather.main);
+        const degree_sign = unit === "metric" ? "°C" : "°F";
+        const weatherGif = getWeatherGif(weather.main);
 
-
-def weather_animation(description):
-    desc = description.lower()
-    if 'rain' in desc:
-        return os.path.join(anim_dir, "hujan.gif")
-    elif 'cloud' in desc:
-        return os.path.join(anim_dir, "mendung.gif")
-    elif 'clear' in desc:
-        return os.path.join(anim_dir, "cerah.gif")
-    elif 'storm' in desc or 'thunder' in desc:
-        return os.path.join(anim_dir, "petir.gif")
-    else:
-        return os.path.join(anim_dir, "cerah.gif")
-
-
-def main():
-    st.set_page_config(page_title="Aplikasi Cuaca", page_icon="🌦️", layout="centered")
-
-    st.markdown("""
-        <style>
-            .main {
-                background: linear-gradient(to bottom, #76b6ec, #c2dfff);
-                color: white;
-            }
-            h1, h2, h3, h4, h5, h6, p {
-                color: white !important;
-            }
-            .block-container {
-                padding-top: 2rem;
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
-    with st.container():
-        st.markdown("<h1 style='text-align:center;'>🌤️ Aplikasi Cuaca Modern</h1>", unsafe_allow_html=True)
-
-    with st.container():
-        default_city = get_location_by_ip()
-        city = st.text_input("Masukkan nama kota", default_city)
-        unit = st.selectbox("Pilih satuan suhu", ["Celsius", "Fahrenheit"])
-
-    with st.container():
-        if st.button("Lihat Cuaca"):
-            current_data, forecast_data = get_weather_data(city, unit)
-
-            if current_data.get("cod") != 200:
-                st.error("Kota tidak ditemukan atau terjadi kesalahan pada API.")
-                return
-
-            weather = current_data['weather'][0]
-            temp = int(current_data['main']['temp'])
-            desc = weather['description'].capitalize()
-            icon = weather_icon(weather['main'])
-            temp_max = int(current_data['main']['temp_max'])
-            temp_min = int(current_data['main']['temp_min'])
-            degree_sign = "°C" if unit == "Celsius" else "°F"
-
-            anim_path = weather_animation(weather['main'])
-            with open(anim_path, "rb") as f:
-                gif_bytes = f.read()
-                encoded_gif = base64.b64encode(gif_bytes).decode()
-
-            # Cuaca saat ini dengan animasi dan tulisan
-            with st.container():
-                st.markdown(f"""
-                <div style="
-                    position: relative;
-                    width: 100%;
-                    max-width: 400px;
-                    height: 250px;
-                    margin: auto;
-                    border-radius: 20px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-                ">
-                    <img src="data:image/gif;base64,{encoded_gif}" style="
-                        position: absolute;
-                        top: 0; left: 0;
-                        width: 100%;
-                        height: 100%;
-                        object-fit: cover;
-                        filter: brightness(0.55);
-                        z-index: 1;
-                    " />
-                    <div style="
-                        position: relative;
-                        z-index: 2;
-                        display: flex;
-                        flex-direction: column;
-                        align-items: center;
-                        justify-content: center;
-                        height: 100%;
-                        padding: 10px 20px;
-                        color: white;
-                        text-shadow: 0px 0px 6px rgba(0, 0, 0, 0.8);
-                        font-family: Arial, sans-serif;
-                    ">
-                        <div style="font-size: 20px; font-weight: 500;">📍 {city.title()}</div>
-                        <div style="font-size: 64px; font-weight: bold; margin-top: -10px;">{temp}{degree_sign}</div>
-                        <div style="font-size: 18px; margin-top: -5px;">{desc} {icon}</div>
-                        <div style="font-size: 14px; margin-top: 5px;">Tinggi: {temp_max}{degree_sign} | Rendah: {temp_min}{degree_sign}</div>
-                    </div>
+        // Weather card
+        document.getElementById('weather-section').innerHTML = `
+            <div class="weather-card">
+                <div class="weather-card-content">
+                    <div class="city-title">📍 ${city.charAt(0).toUpperCase()+city.slice(1)}</div>
+                    <div class="temperature">${temp}${degree_sign}</div>
+                    <div class="weather-desc">${desc} <span class="icon">${icon}</span></div>
+                    <div class="temp-range">Tinggi: ${temp_max}${degree_sign} | Rendah: ${temp_min}${degree_sign}</div>
                 </div>
-                """, unsafe_allow_html=True)
+            </div>
+        `;
 
-            # Informasi tambahan
-            with st.container():
-                st.markdown("""
-                <div style='background-color:#2c70c8; border-radius:10px; padding:10px; color:white; margin-top:20px;'>
-                    <strong>⚠️ Luapan Air Sungai</strong><br>
-                    Australian Government Bureau of Meteorology: Luapan Air Sungai di Molonglo River.
-                </div>
-                """, unsafe_allow_html=True)
+        // Atur background GIF setelah elemen tersedia di DOM
+        setTimeout(() => {
+            const cardContent = document.querySelector('.weather-card-content');
+            if (cardContent) {
+                cardContent.style.backgroundImage = `url('${weatherGif}')`;
+                cardContent.style.backgroundPosition = 'center';
+                cardContent.style.backgroundRepeat = 'no-repeat';
+                cardContent.style.backgroundSize = 'cover';
+            }
+        }, 0);
 
-            # Ramalan per jam (3 jam sekali)
-            with st.container():
-                st.subheader("🌥️ Ramalan Per Jam (3 Jam Sekali)")
-                hourly_df = pd.DataFrame(forecast_data['list'])
-                hourly_df['dt_txt'] = pd.to_datetime(hourly_df['dt_txt'])
-                next_hours = hourly_df.head(6)
+        // Alert box
+        document.getElementById('alert-section').innerHTML = `
+            <div class='alert-box'>
+                <strong>⚠️ Luapan Air Sungai</strong><br>
+                Australian Government Bureau of Meteorology: Luapan Air Sungai di Molonglo River.
+            </div>
+        `;
+        // Hourly forecast (next 6 x 3 jam)
+        const next6 = forecast.list.slice(0,6);
+        let hourlyHtml = `<div class="hourly"><h3>🌥️ Ramalan Per Jam (3 Jam Sekali)</h3>
+            <div class="forecast-row">`;
+        for (const hourData of next6) {
+            const date = new Date(hourData.dt_txt);
+            const jam = String(date.getHours()).padStart(2, '0') + ':00';
+            const tempHour = Math.round(hourData.main.temp);
+            const iconHour = weatherIcon(hourData.weather[0].main);
+            hourlyHtml += `<div class="forecast-col">
+                <div>${jam}</div>
+                <div class="icon">${iconHour}</div>
+                <div>${tempHour}${degree_sign}</div>
+            </div>`;
+        }
+        hourlyHtml += '</div></div>';
+        document.getElementById('hourly-section').innerHTML = hourlyHtml;
 
-                cols = st.columns(6)
-                for i, col in enumerate(cols):
-                    hour = next_hours.iloc[i]['dt_txt'].strftime("%H:%M")
-                    temp_hour = int(next_hours.iloc[i]['main']['temp'])
-                    icon_hour = weather_icon(next_hours.iloc[i]['weather'][0]['main'])
-                    col.markdown(f"<center>{hour}<br>{icon_hour}<br>{temp_hour}{degree_sign}</center>", unsafe_allow_html=True)
+        // Daily forecast (5 hari ke depan)
+        let daily = {};
+        for (const fc of forecast.list) {
+            const date = fc.dt_txt.slice(0,10);
+            if (!daily[date]) {
+                daily[date] = {
+                    temp_min: fc.main.temp_min,
+                    temp_max: fc.main.temp_max,
+                    icon: fc.weather[0].main
+                };
+            } else {
+                daily[date].temp_min = Math.min(daily[date].temp_min, fc.main.temp_min);
+                daily[date].temp_max = Math.max(daily[date].temp_max, fc.main.temp_max);
+            }
+        }
+        const dailyArr = Object.entries(daily).slice(0,5);
+        let dailyHtml = `<div class="daily"><h3>☁️ Ramalan 5 Hari</h3>
+            <div class="forecast-row">`;
+        for (const [date, obj] of dailyArr) {
+            const tgl = new Date(date);
+            const hari = tgl.toLocaleDateString('id-ID', {weekday:'short', day:'2-digit', month:'short'});
+            dailyHtml += `<div class="forecast-col">
+                <div style="font-weight:bold">${hari}</div>
+                <div class="icon-day">${weatherIcon(obj.icon)}</div>
+                <div>${Math.round(obj.temp_max)}${degree_sign} / ${Math.round(obj.temp_min)}${degree_sign}</div>
+            </div>`;
+        }
+        dailyHtml += '</div></div>';
+        document.getElementById('daily-section').innerHTML = dailyHtml;
 
-            # Ramalan 5 hari dengan ikon awan
-            with st.container():
-                st.subheader("☁️ Ramalan 5 Hari")
-                forecast_df = hourly_df.copy()
-                forecast_df['date'] = forecast_df['dt_txt'].dt.date
-                forecast_df['temp_min'] = forecast_df['main'].apply(lambda x: x['temp_min'])
-                forecast_df['temp_max'] = forecast_df['main'].apply(lambda x: x['temp_max'])
-                forecast_df['icon_desc'] = forecast_df['weather'].apply(lambda x: x[0]['main'])
-
-                daily_forecast = forecast_df.groupby('date').agg(
-                    temp_min=('temp_min', 'min'),
-                    temp_max=('temp_max', 'max'),
-                    icon_desc=('icon_desc', 'first')
-                ).reset_index()
-
-                cols = st.columns(5)
-                for i, col in enumerate(cols):
-                    day = daily_forecast.iloc[i]['date'].strftime("%a, %d %b")
-                    icon_desc = daily_forecast.iloc[i]['icon_desc']
-                    icon_day = weather_icon(icon_desc)
-                    temp_max = int(daily_forecast.iloc[i]['temp_max'])
-                    temp_min = int(daily_forecast.iloc[i]['temp_min'])
-                    col.markdown(f"""
-                        <div style="text-align:center; font-family: Arial, sans-serif;">
-                            <div style="font-weight:bold;">{day}</div>
-                            <div style="font-size: 32px;">{icon_day}</div>
-                            <div style="font-size: 14px;">{temp_max}{degree_sign} / {temp_min}{degree_sign}</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-
-
-if __name__ == "__main__":
-    main()
+    }).catch(err => {
+        document.getElementById('weather-section').innerHTML = `<div style="color:#f55;background:#fff3;padding:14px 10px;border-radius:8px;">Gagal mengambil data cuaca.</div>`;
+    });
+}
